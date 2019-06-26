@@ -1,51 +1,52 @@
 package main
 
 import (
-	"flag"
-	"fmt"
 	"log"
 	"net"
-	"os"
 	"strings"
-)
 
-var (
-	hostsFile string
+	"github.com/lextoumbourou/goodhosts"
 )
 
 func main() {
-	flag.StringVar(&hostsFile, "hosts-file", "", "path to hosts file on your system")
-	flag.Parse()
-
-	addrs, err := net.LookupHost("api.asm.skype.com")
+	host := "api.asm.skype.com"
+	addrs, err := net.LookupHost(host)
 	if err != nil {
 		log.Fatalf("failed to lookup: %s", err)
 	}
 	filtered := getRemoteAddrs(addrs)
-
-	fmt.Printf("%v", filtered)
+	hosts, err := goodhosts.NewHosts()
+	if err != nil {
+		log.Fatalf("failed to open hosts file: %s", err)
+	}
+	if ok := hosts.IsWritable(); !ok {
+		log.Fatalf("hosts file is not writable")
+	}
+	for _, addr := range filtered {
+		if err := hosts.Add(addr, host); err != nil {
+			log.Printf("add record into hosts file: %s", err)
+		}
+	}
+	if err := hosts.Flush(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func getRemoteAddrs(input []string) []string {
 	filtered := []string{}
 	for _, addr := range input {
-		if strings.HasPrefix(addr, "::") {
-			continue
+		if !isLocal(addr) {
+			filtered = append(filtered, addr)
 		}
-		filtered = append(filtered, addr)
 	}
 	return filtered
 }
 
-func updateHosts(pathToHosts string, addrs []string) (bool, error) {
-	f, err := os.Open(pathToHosts)
-	if err != nil {
-		return false, err
-	}
-	defer func() {
-		if err := f.Close(); err != nil {
-			log.Fatalf("failed to close %s", pathToHosts)
+func isLocal(addr string) bool {
+	for _, local := range []string{"::", "127.0.0.1", "localhost"} {
+		if strings.HasPrefix(addr, local) {
+			return true
 		}
-	}()
-	return true, nil
+	}
+	return false
 }
