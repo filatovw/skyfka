@@ -1,6 +1,6 @@
 # Skyfka
 
-This tool allows you to check out a real Kafka via Skype
+This tool allows you to see images in Skype.
 
 
 # Usage
@@ -23,3 +23,27 @@ Regular execution:
     2019/06/26 20:34:17 monitor api.asm.skype.com
     ^C2019/06/26 20:34:20 stopped with signal: interrupt
     2019/06/26 20:34:20 skyfka stopped
+
+# TODO:
+
+- add PID file
+- add configurations for Systemd, supervisord
+- build in Docker
+
+# Development
+
+Lint code
+
+    make lint
+
+Build current version
+
+    make build
+
+Delete old artifacts
+
+    make clean
+
+Build release for all available platforms
+
+    make release

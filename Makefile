@@ -11,17 +11,20 @@ default: build
 .PHONY:all
 all: clean release
 
+.PHONY:lint
+lint:
+	go vet ./...
+
 .PHONY:install
 install:
 	go install ./...
 
 .PHONY: build
-build:
+build: install
 	go build $(LDFLAGS) -o ./bin/$(APP) ./cmd/$(APP)/...
 
-
 .PHONY:release
-release:
+release: install
 	$(foreach GOOS, $(PLATFORMS),\
 	$(foreach GOARCH, $(ARCHITECTURES),\
 	$(shell export GOOS=$(GOOS); export GOARCH=$(GOARCH); go build $(LDFLAGS) -o ./bin/$(APP)_$(GOOS)_$(GOARCH) ./cmd/$(APP)/...)))
