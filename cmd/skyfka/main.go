@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -16,11 +17,14 @@ import (
 
 const defaultHost = "api.asm.skype.com"
 
-var regular bool
-var host string
+var (
+	regular bool
+	host    string
+)
 
 func main() {
 	log.Printf("skyfka started")
+
 	flag.BoolVar(&regular, "regular", false, "execute regularly")
 	flag.StringVar(&host, "host", defaultHost, "skype api host")
 	flag.Parse()
@@ -34,6 +38,7 @@ func main() {
 
 		go func() {
 			s := <-sigs
+			fmt.Println()
 			log.Printf("stopped with signal: %s", s)
 			cancel()
 		}()
@@ -51,8 +56,10 @@ func main() {
 		}
 	} else {
 		log.Printf("patch host: %s", host)
+
 		patchHosts(host)
 	}
+
 	log.Printf("skyfka stopped")
 }
 
@@ -69,21 +76,34 @@ func lookupHost(target string) ([]net.IP, error) {
 
 func patchHosts(host string) {
 	addrs, err := lookupHost(host)
-	// addrs, err := net.LookupHost(host)
 	if err != nil {
 		log.Fatalf("failed to lookup: %s", err)
 	}
+
 	log.Printf("IPs: %v", addrs)
-	filtered := getRemoteAddrs(addrs)
+
 	hosts, err := goodhosts.NewHosts()
 	if err != nil {
 		log.Fatalf("failed to open hosts file: %s", err)
 	}
+
 	if ok := hosts.IsWritable(); !ok {
 		log.Fatalf("hosts file is not writable")
 	}
 
-	for _, addr := range filtered {
+	// drop existing lines
+	for _, line := range hosts.Lines {
+		for _, h := range line.Hosts {
+			if h == host {
+				if err := hosts.Remove(line.IP, host); err != nil {
+					log.Printf("failed to drop existing host: %s", host)
+				}
+			}
+		}
+	}
+
+	remoteAddrs := getRemoteAddrs(addrs)
+	for _, addr := range remoteAddrs {
 		if err := hosts.Add(addr.String(), host); err != nil {
 			log.Printf("add record into hosts file: %s", err)
 		}

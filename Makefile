@@ -9,7 +9,7 @@ LDFLAGS=-ldflags "-X main.Version=$(VERSION) -X main.Build=$(BUILD)"
 default: build
 
 .PHONY:all
-all: clean release install
+all: clean release
 
 .PHONY:install
 install:
