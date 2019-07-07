@@ -7,21 +7,24 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
+	"github.com/bogdanovich/dns_resolver"
 	"github.com/lextoumbourou/goodhosts"
 )
 
-const host = "api.asm.skype.com"
+const defaultHost = "api.asm.skype.com"
 
 var regular bool
+var host string
 
 func main() {
 	log.Printf("skyfka started")
 	flag.BoolVar(&regular, "regular", false, "execute regularly")
+	flag.StringVar(&host, "host", defaultHost, "skype api host")
 	flag.Parse()
+
 	if regular {
 		ctx := context.Background()
 		ctx, cancel := context.WithCancel(ctx)
@@ -41,23 +44,36 @@ func main() {
 		for {
 			select {
 			case <-timer.C:
-				patchHosts()
+				patchHosts(host)
 			case <-ctx.Done():
 				break STOP
 			}
 		}
 	} else {
 		log.Printf("patch host: %s", host)
-		patchHosts()
+		patchHosts(host)
 	}
 	log.Printf("skyfka stopped")
 }
 
-func patchHosts() {
-	addrs, err := net.LookupHost(host)
+func lookupHost(target string) ([]net.IP, error) {
+	resolver := dns_resolver.New([]string{"8.8.8.8", "8.8.4.4"})
+	resolver.RetryTimes = 5
+
+	ip, err := resolver.LookupHost(target)
+	if err != nil {
+		return nil, err
+	}
+	return ip, nil
+}
+
+func patchHosts(host string) {
+	addrs, err := lookupHost(host)
+	// addrs, err := net.LookupHost(host)
 	if err != nil {
 		log.Fatalf("failed to lookup: %s", err)
 	}
+	log.Printf("IPs: %v", addrs)
 	filtered := getRemoteAddrs(addrs)
 	hosts, err := goodhosts.NewHosts()
 	if err != nil {
@@ -66,31 +82,24 @@ func patchHosts() {
 	if ok := hosts.IsWritable(); !ok {
 		log.Fatalf("hosts file is not writable")
 	}
+
 	for _, addr := range filtered {
-		if err := hosts.Add(addr, host); err != nil {
+		if err := hosts.Add(addr.String(), host); err != nil {
 			log.Printf("add record into hosts file: %s", err)
 		}
 	}
+
 	if err := hosts.Flush(); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func getRemoteAddrs(input []string) []string {
-	filtered := []string{}
+func getRemoteAddrs(input []net.IP) []net.IP {
+	filtered := []net.IP{}
 	for _, addr := range input {
-		if !isLocal(addr) {
+		if !addr.IsLoopback() {
 			filtered = append(filtered, addr)
 		}
 	}
 	return filtered
-}
-
-func isLocal(addr string) bool {
-	for _, local := range []string{"::", "127.0.0.1", "localhost"} {
-		if strings.HasPrefix(addr, local) {
-			return true
-		}
-	}
-	return false
 }
